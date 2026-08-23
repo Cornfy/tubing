@@ -19,7 +19,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.File
+import java.util.Date
 
 data class EditProfileContentUiState(
     val isLoading: Boolean = false,
@@ -206,15 +208,31 @@ class EditProfileContentViewModel(private val profileId: Long, initialIsReadOnly
                         editor?.getText() ?: ""
                     }
 
+                // 1. Strict JSON syntax validation
+                if (currentContent.isNotBlank()) {
+                    try {
+                        JSONObject(currentContent)
+                    } catch (e: Exception) {
+                        throw IllegalArgumentException("Invalid JSON syntax: ${e.message}")
+                    }
+                }
+
                 profile?.let { p ->
                     if (p.typed.type == TypedProfile.Type.Template) {
-                        // 1. Save raw template content
+                        // 2. Always save template source safely
                         File(p.typed.templatePath).writeText(currentContent)
-                        // 2. Compile into final config if content is not empty
                         if (currentContent.isNotBlank() && currentContent != "{}") {
-                            val compiled = Libbox.processTemplate(currentContent)
-                            Libbox.checkConfig(compiled)
-                            File(p.typed.path).writeText(compiled)
+                            try {
+                                val compiled = Libbox.processTemplate(currentContent)
+                                Libbox.checkConfig(compiled)
+                                File(p.typed.path).writeText(compiled)
+
+                                // 3. Update timestamp on successful compile
+                                p.typed.lastUpdated = Date()
+                                ProfileManager.update(p)
+                            } catch (compilationError: Exception) {
+                                throw Exception("Template saved, but subscription fetch failed: ${compilationError.message}")
+                            }
                         }
                     } else {
                         File(p.typed.path).writeText(currentContent)

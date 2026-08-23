@@ -354,7 +354,7 @@ class DashboardViewModel :
     }
 
     fun updateProfile(profile: Profile) {
-        if (profile.typed.type != TypedProfile.Type.Remote) return
+        if (profile.typed.type != TypedProfile.Type.Remote && profile.typed.type != TypedProfile.Type.Template) return
 
         viewModelScope.launch(Dispatchers.IO) {
             // Set updating state
@@ -363,9 +363,20 @@ class DashboardViewModel :
             }
 
             try {
-                // Fetch remote config
-                val content = HTTPClient().use { it.getString(profile.typed.remoteURL) }
-                Libbox.checkConfig(content)
+                val content = if (profile.typed.type == TypedProfile.Type.Template) {
+                    val templateFile = File(profile.typed.templatePath)
+                    if (!templateFile.exists()) {
+                        throw Exception("Template file not found")
+                    }
+                    val templateContent = templateFile.readText()
+                    val compiled = Libbox.processTemplate(templateContent)
+                    Libbox.checkConfig(compiled)
+                    compiled
+                } else {
+                    val fetched = HTTPClient().use { it.getString(profile.typed.remoteURL) }
+                    Libbox.checkConfig(fetched)
+                    fetched
+                }
 
                 // Check if content changed
                 val file = File(profile.typed.path)

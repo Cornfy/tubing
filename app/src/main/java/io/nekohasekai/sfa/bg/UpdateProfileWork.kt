@@ -34,7 +34,7 @@ class UpdateProfileWork {
         private suspend fun reconfigureUpdater0() {
             val remoteProfiles =
                 ProfileManager.list()
-                    .filter { it.typed.type == TypedProfile.Type.Remote && it.typed.autoUpdate }
+                    .filter { (it.typed.type == TypedProfile.Type.Remote || it.typed.type == TypedProfile.Type.Template) && it.typed.autoUpdate }
             if (remoteProfiles.isEmpty()) {
                 WorkManager.getInstance(Application.application).cancelUniqueWork(WORK_NAME)
                 return
@@ -64,7 +64,7 @@ class UpdateProfileWork {
             var selectedProfileUpdated = false
             val remoteProfiles =
                 ProfileManager.list()
-                    .filter { it.typed.type == TypedProfile.Type.Remote && it.typed.autoUpdate }
+                    .filter { (it.typed.type == TypedProfile.Type.Remote || it.typed.type == TypedProfile.Type.Template) && it.typed.autoUpdate }
             if (remoteProfiles.isEmpty()) return Result.success()
             var success = true
             val selectedProfile = Settings.selectedProfile
@@ -75,8 +75,18 @@ class UpdateProfileWork {
                     continue
                 }
                 try {
-                    val content = HTTPClient().use { it.getString(profile.typed.remoteURL) }
-                    Libbox.checkConfig(content)
+                    val content = if (profile.typed.type == TypedProfile.Type.Template) {
+                        val templateFile = File(profile.typed.templatePath)
+                        if (!templateFile.exists()) continue
+                        val templateContent = templateFile.readText()
+                        val compiled = Libbox.processTemplate(templateContent)
+                        Libbox.checkConfig(compiled)
+                        compiled
+                    } else {
+                        val fetched = HTTPClient().use { it.getString(profile.typed.remoteURL) }
+                        Libbox.checkConfig(fetched)
+                        fetched
+                    }
                     val file = File(profile.typed.path)
                     if (file.readText() != content) {
                         File(profile.typed.path).writeText(content)
