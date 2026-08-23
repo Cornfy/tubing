@@ -28,19 +28,19 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 📱 配置 Android SDK & NDK
-        uses: android-actions/setup-android@v3
-
-      - name: 🔧 安装项目指定 NDK
+      - name: 📱 安装项目指定 NDK
         run: |
-          sdkmanager --install "ndk;28.0.13004108"
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;28.0.13004108" > /dev/null
 
-      - name: ⚙️ 编译 libbox.aar (包含你的 sub-tools)
+      - name: ⚙️ 编译 libbox.aar
         run: |
+          go install github.com/sagernet/gomobile/cmd/gomobile@latest
+          export PATH=$(go env GOPATH)/bin:$PATH
+          gomobile init
+
           git clone -b feat/subtool-template https://github.com/Cornfy/sing-box.git sing-box-core
           cd sing-box-core
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
-          export ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.0.13004108
+          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.0.13004108
           go run ./cmd/internal/build_libbox -target android
           mkdir -p ../app/libs
           cp libbox.aar ../app/libs/libbox.aar
@@ -51,7 +51,7 @@ jobs:
       - name: 🚀 编译 Debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleOtherDebug --no-daemon --stacktrace
+          ./gradlew assembleOtherDebug --no-daemon
 
       - name: 📦 上传构建产物 (APK)
         uses: actions/upload-artifact@v4
