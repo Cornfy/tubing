@@ -195,6 +195,9 @@ private suspend fun createProfileContent(profile: Profile): ByteArray {
         TypedProfile.Type.Remote -> {
             content.type = Libbox.ProfileTypeRemote
         }
+        TypedProfile.Type.Template -> {
+            content.type = Libbox.ProfileTypeLocal
+        }
     }
     content.config = java.io.File(profile.typed.path).readText()
     content.remotePath = profile.typed.remoteURL
@@ -328,6 +331,7 @@ private fun ProfilePickerRow(
                             R.string.profile_type_remote_updated,
                             RelativeTimeFormatter.format(context, profile.typed.lastUpdated),
                         )
+                        TypedProfile.Type.Template -> stringResource(R.string.profile_type_template)
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
