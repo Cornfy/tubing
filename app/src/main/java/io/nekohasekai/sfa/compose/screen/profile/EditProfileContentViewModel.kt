@@ -8,6 +8,7 @@ import io.nekohasekai.sfa.compat.ProfileCodeEditor
 import io.nekohasekai.sfa.compat.ProfileEditorColors
 import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
+import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.ktx.unwrap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -121,6 +122,10 @@ class EditProfileContentViewModel(private val profileId: Long, initialIsReadOnly
             return
         }
 
+        if (profile?.typed?.type == TypedProfile.Type.Template) {
+            return
+        }
+
         withContext(Dispatchers.IO) {
             try {
                 _uiState.update { it.copy(isCheckingConfig = true) }
@@ -157,8 +162,17 @@ class EditProfileContentViewModel(private val profileId: Long, initialIsReadOnly
                         ?: throw IllegalArgumentException("Profile not found")
                 profile = loadedProfile
 
-                // Just load the content, we already have profile metadata from Intent
-                val content = File(loadedProfile.typed.path).readText()
+                val targetFile = if (loadedProfile.typed.type == TypedProfile.Type.Template) {
+                    val tFile = File(loadedProfile.typed.templatePath)
+                    if (!tFile.exists() && File(loadedProfile.typed.path).exists()) {
+                        tFile.writeText(File(loadedProfile.typed.path).readText())
+                    }
+                    tFile
+                } else {
+                    File(loadedProfile.typed.path)
+                }
+
+                val content = if (targetFile.exists()) targetFile.readText() else "{}"
 
                 withContext(Dispatchers.Main) {
                     editor?.setText(content)
@@ -192,9 +206,19 @@ class EditProfileContentViewModel(private val profileId: Long, initialIsReadOnly
                         editor?.getText() ?: ""
                     }
 
-                // Save to file without validation
                 profile?.let { p ->
-                    File(p.typed.path).writeText(currentContent)
+                    if (p.typed.type == TypedProfile.Type.Template) {
+                        // 1. Save raw template content
+                        File(p.typed.templatePath).writeText(currentContent)
+                        // 2. Compile into final config if content is not empty
+                        if (currentContent.isNotBlank() && currentContent != "{}") {
+                            val compiled = Libbox.processTemplate(currentContent)
+                            Libbox.checkConfig(compiled)
+                            File(p.typed.path).writeText(compiled)
+                        }
+                    } else {
+                        File(p.typed.path).writeText(currentContent)
+                    }
                 }
 
                 _uiState.update {

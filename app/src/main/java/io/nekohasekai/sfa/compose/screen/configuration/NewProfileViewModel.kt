@@ -50,6 +50,7 @@ data class NewProfileUiState(
 enum class ProfileType {
     Local,
     Remote,
+    Template,
 }
 
 enum class ProfileSource {
@@ -167,7 +168,7 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
 
         // Validate based on profile type
         when (state.profileType) {
-            ProfileType.Local -> {
+            ProfileType.Local, ProfileType.Template -> {
                 if (state.profileSource == ProfileSource.Import && state.importUri == null && state.qrsData == null) {
                     _uiState.update { it.copy(importError = context.getString(R.string.profile_input_required)) }
                     hasError = true
@@ -201,6 +202,7 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
                         when (state.profileType) {
                             ProfileType.Local -> createLocalProfile(state)
                             ProfileType.Remote -> createRemoteProfile(state)
+                            ProfileType.Template -> createTemplateProfile(state)
                         }
                     }
 
@@ -314,6 +316,68 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
             UpdateProfileWork.reconfigureUpdater()
         }
 
+        return profile
+    }
+
+    private suspend fun createTemplateProfile(state: NewProfileUiState): Profile {
+        val context = getApplication<Application>()
+        val typedProfile =
+            TypedProfile().apply {
+                type = TypedProfile.Type.Template
+            }
+
+        val profile =
+            Profile(name = state.name, typed = typedProfile).apply {
+                userOrder = ProfileManager.nextOrder()
+            }
+
+        val fileID = ProfileManager.nextFileID()
+        val configDirectory = File(context.filesDir, "configs").also { it.mkdirs() }
+        val configFile = File(configDirectory, "$fileID.json")
+        typedProfile.path = configFile.path
+        val templateFile = File(typedProfile.templatePath)
+
+        // Get template content
+        val templateContent =
+            when (state.profileSource) {
+                ProfileSource.CreateNew -> "{}"
+                ProfileSource.Import -> {
+                    if (state.qrsData != null) {
+                        val content = Libbox.decodeProfileContent(state.qrsData)
+                        content.config
+                    } else {
+                        state.importUri?.let { uri ->
+                            val sourceURL = uri.toString()
+                            when {
+                                sourceURL.startsWith("content://") -> {
+                                    val inputStream = context.contentResolver.openInputStream(uri) as InputStream
+                                    inputStream.use { it.bufferedReader().readText() }
+                                }
+                                sourceURL.startsWith("file://") -> {
+                                    File(Uri.parse(sourceURL).path!!).readText()
+                                }
+                                sourceURL.startsWith("http://") || sourceURL.startsWith("https://") -> {
+                                    HTTPClient().use { it.getString(sourceURL) }
+                                }
+                                else -> throw Exception("Unsupported source: $sourceURL")
+                            }
+                        } ?: "{}"
+                    }
+                }
+            }
+
+        templateFile.writeText(templateContent)
+
+        // If imported with content, compile immediately to produce initial config.json
+        if (templateContent.isNotBlank() && templateContent != "{}") {
+            val compiledConfig = Libbox.processTemplate(templateContent)
+            Libbox.checkConfig(compiledConfig)
+            configFile.writeText(compiledConfig)
+        } else {
+            configFile.writeText("{}")
+        }
+
+        ProfileManager.create(profile, andSelect = true)
         return profile
     }
 }

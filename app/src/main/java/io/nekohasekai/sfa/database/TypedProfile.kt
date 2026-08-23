@@ -14,11 +14,13 @@ class TypedProfile() : Parcelable {
     enum class Type {
         Local,
         Remote,
+        Template,
         ;
 
         fun getString(context: Context): String = when (this) {
             Local -> context.getString(R.string.profile_type_local)
             Remote -> context.getString(R.string.profile_type_remote)
+            Template -> context.getString(R.string.profile_type_template)
         }
 
         companion object {
@@ -39,6 +41,10 @@ class TypedProfile() : Parcelable {
     var lastUpdated: Date = Date(0)
     var autoUpdate: Boolean = false
     var autoUpdateInterval = 60
+
+    val templatePath: String
+        get() = if (path.endsWith(".json")) path.replace(".json", ".template.json") else "$path.template.json"
+
 
     constructor(reader: Parcel) : this() {
         val version = reader.readInt()

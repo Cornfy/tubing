@@ -262,8 +262,8 @@ fun NewProfileScreen(
                             RoundedCornerShape(
                                 topStart = 0.dp,
                                 bottomStart = 0.dp,
-                                topEnd = 12.dp,
-                                bottomEnd = 12.dp,
+                                topEnd = 0.dp,
+                                bottomEnd = 0.dp,
                             ),
                             colors =
                             if (uiState.profileType == ProfileType.Remote) {
@@ -286,13 +286,44 @@ fun NewProfileScreen(
                         ) {
                             Text(stringResource(R.string.profile_type_remote))
                         }
+                        OutlinedButton(
+                            onClick = { viewModel.updateProfileType(ProfileType.Template) },
+                            modifier = Modifier.weight(1f),
+                            shape =
+                            RoundedCornerShape(
+                                topStart = 0.dp,
+                                bottomStart = 0.dp,
+                                topEnd = 12.dp,
+                                bottomEnd = 12.dp,
+                            ),
+                            colors =
+                            if (uiState.profileType == ProfileType.Template) {
+                                ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            } else {
+                                ButtonDefaults.outlinedButtonColors()
+                            },
+                            border =
+                            BorderStroke(
+                                1.dp,
+                                if (uiState.profileType == ProfileType.Template) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.outline
+                                },
+                            ),
+                        ) {
+                            Text(stringResource(R.string.profile_type_template))
+                        }
                     }
                 }
             }
 
-            // Local Profile Options
+            // Local & Template Profile Options
             AnimatedVisibility(
-                visible = uiState.profileType == ProfileType.Local,
+                visible = uiState.profileType == ProfileType.Local || uiState.profileType == ProfileType.Template,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically(),
             ) {

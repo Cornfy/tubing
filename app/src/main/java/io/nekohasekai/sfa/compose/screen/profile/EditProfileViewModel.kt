@@ -246,7 +246,7 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
         val state = _uiState.value
         val profile = state.profile ?: return
 
-        if (profile.typed.type != TypedProfile.Type.Remote) return
+        if (profile.typed.type != TypedProfile.Type.Remote && profile.typed.type != TypedProfile.Type.Template) return
 
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isUpdating = true) }
@@ -254,9 +254,20 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 var selectedProfileUpdated = false
 
-                // Fetch remote config
-                val content = HTTPClient().use { it.getString(profile.typed.remoteURL) }
-                Libbox.checkConfig(content)
+                val content = if (profile.typed.type == TypedProfile.Type.Template) {
+                    val templateFile = File(profile.typed.templatePath)
+                    if (!templateFile.exists()) {
+                        throw Exception("Template file not found")
+                    }
+                    val templateContent = templateFile.readText()
+                    val compiled = Libbox.processTemplate(templateContent)
+                    Libbox.checkConfig(compiled)
+                    compiled
+                } else {
+                    val fetched = HTTPClient().use { it.getString(profile.typed.remoteURL) }
+                    Libbox.checkConfig(fetched)
+                    fetched
+                }
 
                 // Check if content changed
                 val file = File(profile.typed.path)
