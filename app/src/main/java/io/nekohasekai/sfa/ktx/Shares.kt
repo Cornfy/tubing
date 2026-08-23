@@ -18,9 +18,11 @@ suspend fun Context.shareProfile(profile: Profile) {
         TypedProfile.Type.Local -> {
             content.type = io.nekohasekai.libbox.Libbox.ProfileTypeLocal
         }
-
         TypedProfile.Type.Remote -> {
             content.type = io.nekohasekai.libbox.Libbox.ProfileTypeRemote
+        }
+        TypedProfile.Type.Template -> {
+            content.type = io.nekohasekai.libbox.Libbox.ProfileTypeLocal
         }
     }
     content.config = File(profile.typed.path).readText()
