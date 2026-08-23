@@ -53,9 +53,30 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleOtherDebug --no-daemon
 
-      - name: 📦 上传构建产物 (APK)
+      - name: 📦 上传 arm64-v8a APK
         uses: actions/upload-artifact@v4
         with:
-          name: SingBox-Template-APK
-          path: app/build/outputs/apk/other/debug/*.apk
+          name: SFA-arm64-v8a
+          path: app/build/outputs/apk/other/debug/*arm64-v8a*.apk
+          retention-days: 7
+
+      - name: 📦 上传 armeabi-v7a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SFA-armeabi-v7a
+          path: app/build/outputs/apk/other/debug/*armeabi-v7a*.apk
+          retention-days: 7
+
+      - name: 📦 上传 x86_64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SFA-x86_64
+          path: app/build/outputs/apk/other/debug/*x86_64*.apk
+          retention-days: 7
+
+      - name: 📦 上传 universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SFA-universal
+          path: app/build/outputs/apk/other/debug/*universal*.apk
           retention-days: 7
