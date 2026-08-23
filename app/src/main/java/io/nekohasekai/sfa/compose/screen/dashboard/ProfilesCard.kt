@@ -629,6 +629,9 @@ private suspend fun createProfileContent(profile: Profile): ByteArray {
         TypedProfile.Type.Remote -> {
             content.type = Libbox.ProfileTypeRemote
         }
+        TypedProfile.Type.Template -> {
+            content.type = Libbox.ProfileTypeLocal
+        }
     }
     content.config = java.io.File(profile.typed.path).readText()
     content.remotePath = profile.typed.remoteURL
@@ -655,6 +658,8 @@ private fun ProfileInfoRow(profile: Profile?) {
             Icon(
                 imageVector = if (profile.typed.type == TypedProfile.Type.Remote) {
                     Icons.Default.Cloud
+                } else if (profile.typed.type == TypedProfile.Type.Template) {
+                    Icons.Default.DataObject
                 } else {
                     Icons.Outlined.Description
                 },
@@ -665,6 +670,8 @@ private fun ProfileInfoRow(profile: Profile?) {
             Text(
                 text = if (profile.typed.type == TypedProfile.Type.Remote) {
                     stringResource(R.string.profile_type_remote)
+                } else if (profile.typed.type == TypedProfile.Type.Template) {
+                    stringResource(R.string.profile_type_template)
                 } else {
                     stringResource(R.string.profile_type_local)
                 },
@@ -673,7 +680,7 @@ private fun ProfileInfoRow(profile: Profile?) {
             )
         }
 
-        if (profile.typed.type == TypedProfile.Type.Remote) {
+        if (profile.typed.type == TypedProfile.Type.Remote || profile.typed.type == TypedProfile.Type.Template) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -720,7 +727,7 @@ private fun ProfileActionRow(
             onClick = onEdit,
         )
 
-        if (profile.typed.type == TypedProfile.Type.Remote) {
+        if (profile.typed.type == TypedProfile.Type.Remote || profile.typed.type == TypedProfile.Type.Template) {
             ActionButton(
                 icon = when {
                     showUpdateSuccess -> Icons.Default.Check
