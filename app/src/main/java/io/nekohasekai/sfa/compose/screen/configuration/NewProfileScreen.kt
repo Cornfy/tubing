@@ -25,6 +25,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CreateNewFolder
@@ -223,6 +225,7 @@ fun NewProfileScreen(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy((-1).dp), // Overlap borders
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         OutlinedButton(
                             onClick = { viewModel.updateProfileType(ProfileType.Local) },
@@ -253,7 +256,7 @@ fun NewProfileScreen(
                                 },
                             ),
                         ) {
-                            Text(stringResource(R.string.profile_type_local))
+                            Text(stringResource(R.string.profile_type_local), maxLines = 1)
                         }
                         OutlinedButton(
                             onClick = { viewModel.updateProfileType(ProfileType.Remote) },
@@ -284,7 +287,7 @@ fun NewProfileScreen(
                                 },
                             ),
                         ) {
-                            Text(stringResource(R.string.profile_type_remote))
+                            Text(stringResource(R.string.profile_type_remote), maxLines = 1)
                         }
                         OutlinedButton(
                             onClick = { viewModel.updateProfileType(ProfileType.Template) },
@@ -315,7 +318,7 @@ fun NewProfileScreen(
                                 },
                             ),
                         ) {
-                            Text(stringResource(R.string.profile_type_template))
+                            Text(stringResource(R.string.profile_type_template), maxLines = 1)
                         }
                     }
                 }
@@ -347,6 +350,7 @@ fun NewProfileScreen(
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy((-1).dp), // Overlap borders
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             OutlinedButton(
                                 onClick = { viewModel.updateProfileSource(ProfileSource.CreateNew) },
@@ -383,7 +387,7 @@ fun NewProfileScreen(
                                     modifier = Modifier.size(18.dp),
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text(stringResource(R.string.profile_source_create_new))
+                                Text(stringResource(R.string.profile_source_create_new), maxLines = 1)
                             }
                             OutlinedButton(
                                 onClick = { viewModel.updateProfileSource(ProfileSource.Import) },
@@ -420,7 +424,7 @@ fun NewProfileScreen(
                                     modifier = Modifier.size(18.dp),
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text(stringResource(R.string.profile_source_import))
+                                Text(stringResource(R.string.profile_source_import), maxLines = 1)
                             }
                         }
 
@@ -485,6 +489,73 @@ fun NewProfileScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // Template Subscription URLs (Dynamic Multi-URL Input)
+            AnimatedVisibility(
+                visible = uiState.profileType == ProfileType.Template,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f),
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.profile_template_subscription_urls),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+
+                        uiState.templateSubUrls.forEachIndexed { index, url ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                OutlinedTextField(
+                                    value = url,
+                                    onValueChange = { viewModel.updateTemplateSubUrl(index, it) },
+                                    modifier = Modifier.weight(1f),
+                                    placeholder = {
+                                        Text(
+                                            stringResource(R.string.profile_template_subscription_url_hint),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp),
+                                )
+                                if (uiState.templateSubUrls.size > 1) {
+                                    IconButton(onClick = { viewModel.removeTemplateSubUrl(index) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = { viewModel.addTemplateSubUrl() },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.profile_template_add_subscription_url))
                         }
                     }
                 }
