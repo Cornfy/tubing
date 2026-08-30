@@ -148,6 +148,10 @@
     <string name="profile_auto_update_interval_minimum_hint">最低值为 15</string>
     <string name="profile_type_local">本地</string>
     <string name="profile_type_remote">远程</string>
+    <string name="profile_type_template">模板</string>
+    <string name="profile_template_subscription_urls">订阅链接 (可选)</string>
+    <string name="profile_template_add_subscription_url">添加订阅链接</string>
+    <string name="profile_template_subscription_url_hint">订阅链接 (http:// 或 https://)</string>
     <string name="profile_type_remote_updated">远程 • %s</string>
     <string name="profile_source_create_new">创建</string>
     <string name="profile_source_import">导入</string>

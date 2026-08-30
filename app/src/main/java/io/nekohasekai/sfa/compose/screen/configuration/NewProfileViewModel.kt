@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
 import java.util.Date
@@ -30,6 +32,8 @@ data class NewProfileUiState(
     val remoteUrl: String = "",
     val autoUpdate: Boolean = true,
     val autoUpdateInterval: Int = 60,
+    // Template profile fields
+    val templateSubUrls: List<String> = listOf(""),
     // File import
     val importUri: Uri? = null,
     val importFileName: String? = null,
@@ -118,6 +122,36 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
 
     fun updateAutoUpdate(enabled: Boolean) {
         _uiState.update { it.copy(autoUpdate = enabled) }
+    }
+
+    fun updateTemplateSubUrl(index: Int, url: String) {
+        _uiState.update { state ->
+            val updated = state.templateSubUrls.toMutableList()
+            if (index in updated.indices) {
+                updated[index] = url
+            }
+            state.copy(templateSubUrls = updated)
+        }
+    }
+
+    fun addTemplateSubUrl() {
+        _uiState.update { state ->
+            state.copy(templateSubUrls = state.templateSubUrls + "")
+        }
+    }
+
+    fun removeTemplateSubUrl(index: Int) {
+        _uiState.update { state ->
+            if (state.templateSubUrls.size <= 1) {
+                state.copy(templateSubUrls = listOf(""))
+            } else {
+                val updated = state.templateSubUrls.toMutableList()
+                if (index in updated.indices) {
+                    updated.removeAt(index)
+                }
+                state.copy(templateSubUrls = updated)
+            }
+        }
     }
 
     fun updateAutoUpdateInterval(interval: String) {
@@ -338,7 +372,7 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
         val templateFile = File(typedProfile.templatePath)
 
         // Get template content
-        val templateContent =
+        var templateContent =
             when (state.profileSource) {
                 ProfileSource.CreateNew -> "{}"
                 ProfileSource.Import -> {
@@ -366,15 +400,45 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
                 }
             }
 
+        // Filter valid URLs entered by user
+        val validUrls = state.templateSubUrls.map { it.trim() }.filter { it.startsWith("http://") || it.startsWith("https://") }
+        if (validUrls.isNotEmpty()) {
+            try {
+                val jsonObject = if (templateContent.isNotBlank() && templateContent != "{}") {
+                    JSONObject(templateContent)
+                } else {
+                    JSONObject()
+                }
+                val extra = if (jsonObject.has("_extra")) {
+                    jsonObject.getJSONObject("_extra")
+                } else {
+                    JSONObject().also { jsonObject.put("_extra", it) }
+                }
+                val newSubUrls = JSONArray()
+                for ((index, url) in validUrls.withIndex()) {
+                    newSubUrls.put(JSONArray().put("Sub ${index + 1}").put(url))
+                }
+                extra.put("sub_urls", newSubUrls)
+                templateContent = jsonObject.toString(2).replace("\\/", "/")
+            } catch (_: Exception) {
+            }
+        }
+
         templateFile.writeText(templateContent)
 
-        // If imported with content, compile immediately to produce initial config.json
-        if (templateContent.isNotBlank() && templateContent != "{}") {
-            val compiledConfig = Libbox.processTemplate(templateContent)
-            Libbox.checkConfig(compiledConfig)
-            configFile.writeText(compiledConfig)
-        } else {
-            configFile.writeText("{}")
+        // Try to compile, fallback to minimal placeholder if failed
+        var compiledSuccess = false
+        try {
+            if (templateContent.isNotBlank() && templateContent != "{}") {
+                val compiledConfig = Libbox.processTemplate(templateContent)
+                Libbox.checkConfig(compiledConfig)
+                configFile.writeText(compiledConfig)
+                compiledSuccess = true
+            }
+        } catch (_: Exception) {
+        }
+        if (!compiledSuccess) {
+            configFile.writeText("""{"outbounds":[{"type":"direct","tag":"direct"}]}""")
         }
 
         ProfileManager.create(profile, andSelect = true)
