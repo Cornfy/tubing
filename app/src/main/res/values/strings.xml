@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
     <!-- App -->
-    <string name="app_name" translatable="false">sing-box</string>
+    <string name="app_name" translatable="false">Tubing</string>
     <string name="app_version_title">App version</string>
     <string name="language">Language</string>
     <string name="system_default">System default</string>
@@ -148,6 +148,10 @@
     <string name="profile_auto_update_interval_minimum_hint">Minimum value is 15</string>
     <string name="profile_type_local">Local</string>
     <string name="profile_type_remote">Remote</string>
+    <string name="profile_type_template">Template</string>
+    <string name="profile_template_subscription_urls">Subscription URLs (Optional)</string>
+    <string name="profile_template_add_subscription_url">Add Subscription URL</string>
+    <string name="profile_template_subscription_url_hint">Subscription URL (http:// or https://)</string>
     <string name="profile_type_remote_updated">Remote • %s</string>
     <string name="profile_source_create_new">Create New</string>
     <string name="profile_source_import">Import</string>

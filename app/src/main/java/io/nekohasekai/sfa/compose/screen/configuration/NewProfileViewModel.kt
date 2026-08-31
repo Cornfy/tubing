@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
 import java.util.Date
@@ -30,6 +32,8 @@ data class NewProfileUiState(
     val remoteUrl: String = "",
     val autoUpdate: Boolean = true,
     val autoUpdateInterval: Int = 60,
+    // Template profile fields
+    val templateSubUrls: List<String> = listOf(""),
     // File import
     val importUri: Uri? = null,
     val importFileName: String? = null,
@@ -50,6 +54,7 @@ data class NewProfileUiState(
 enum class ProfileType {
     Local,
     Remote,
+    Template,
 }
 
 enum class ProfileSource {
@@ -119,6 +124,36 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
         _uiState.update { it.copy(autoUpdate = enabled) }
     }
 
+    fun updateTemplateSubUrl(index: Int, url: String) {
+        _uiState.update { state ->
+            val updated = state.templateSubUrls.toMutableList()
+            if (index in updated.indices) {
+                updated[index] = url
+            }
+            state.copy(templateSubUrls = updated)
+        }
+    }
+
+    fun addTemplateSubUrl() {
+        _uiState.update { state ->
+            state.copy(templateSubUrls = state.templateSubUrls + "")
+        }
+    }
+
+    fun removeTemplateSubUrl(index: Int) {
+        _uiState.update { state ->
+            if (state.templateSubUrls.size <= 1) {
+                state.copy(templateSubUrls = listOf(""))
+            } else {
+                val updated = state.templateSubUrls.toMutableList()
+                if (index in updated.indices) {
+                    updated.removeAt(index)
+                }
+                state.copy(templateSubUrls = updated)
+            }
+        }
+    }
+
     fun updateAutoUpdateInterval(interval: String) {
         val intValue = interval.toIntOrNull() ?: 60
         _uiState.update { it.copy(autoUpdateInterval = intValue.coerceAtLeast(15)) }
@@ -167,7 +202,7 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
 
         // Validate based on profile type
         when (state.profileType) {
-            ProfileType.Local -> {
+            ProfileType.Local, ProfileType.Template -> {
                 if (state.profileSource == ProfileSource.Import && state.importUri == null && state.qrsData == null) {
                     _uiState.update { it.copy(importError = context.getString(R.string.profile_input_required)) }
                     hasError = true
@@ -201,6 +236,7 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
                         when (state.profileType) {
                             ProfileType.Local -> createLocalProfile(state)
                             ProfileType.Remote -> createRemoteProfile(state)
+                            ProfileType.Template -> createTemplateProfile(state)
                         }
                     }
 
@@ -314,6 +350,98 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
             UpdateProfileWork.reconfigureUpdater()
         }
 
+        return profile
+    }
+
+    private suspend fun createTemplateProfile(state: NewProfileUiState): Profile {
+        val context = getApplication<Application>()
+        val typedProfile =
+            TypedProfile().apply {
+                type = TypedProfile.Type.Template
+            }
+
+        val profile =
+            Profile(name = state.name, typed = typedProfile).apply {
+                userOrder = ProfileManager.nextOrder()
+            }
+
+        val fileID = ProfileManager.nextFileID()
+        val configDirectory = File(context.filesDir, "configs").also { it.mkdirs() }
+        val configFile = File(configDirectory, "$fileID.json")
+        typedProfile.path = configFile.path
+        val templateFile = File(typedProfile.templatePath)
+
+        // Get template content
+        var templateContent =
+            when (state.profileSource) {
+                ProfileSource.CreateNew -> "{}"
+                ProfileSource.Import -> {
+                    if (state.qrsData != null) {
+                        val content = Libbox.decodeProfileContent(state.qrsData)
+                        content.config
+                    } else {
+                        state.importUri?.let { uri ->
+                            val sourceURL = uri.toString()
+                            when {
+                                sourceURL.startsWith("content://") -> {
+                                    val inputStream = context.contentResolver.openInputStream(uri) as InputStream
+                                    inputStream.use { it.bufferedReader().readText() }
+                                }
+                                sourceURL.startsWith("file://") -> {
+                                    File(Uri.parse(sourceURL).path!!).readText()
+                                }
+                                sourceURL.startsWith("http://") || sourceURL.startsWith("https://") -> {
+                                    HTTPClient().use { it.getString(sourceURL) }
+                                }
+                                else -> throw Exception("Unsupported source: $sourceURL")
+                            }
+                        } ?: "{}"
+                    }
+                }
+            }
+
+        // Filter valid URLs entered by user
+        val validUrls = state.templateSubUrls.map { it.trim() }.filter { it.startsWith("http://") || it.startsWith("https://") }
+        if (validUrls.isNotEmpty()) {
+            try {
+                val jsonObject = if (templateContent.isNotBlank() && templateContent != "{}") {
+                    JSONObject(templateContent)
+                } else {
+                    JSONObject()
+                }
+                val extra = if (jsonObject.has("_extra")) {
+                    jsonObject.getJSONObject("_extra")
+                } else {
+                    JSONObject().also { jsonObject.put("_extra", it) }
+                }
+                val newSubUrls = JSONArray()
+                for ((index, url) in validUrls.withIndex()) {
+                    newSubUrls.put(JSONArray().put("Sub ${index + 1}").put(url))
+                }
+                extra.put("sub_urls", newSubUrls)
+                templateContent = jsonObject.toString(2).replace("\\/", "/")
+            } catch (_: Exception) {
+            }
+        }
+
+        templateFile.writeText(templateContent)
+
+        // Try to compile, fallback to minimal placeholder if failed
+        var compiledSuccess = false
+        try {
+            if (templateContent.isNotBlank() && templateContent != "{}") {
+                val compiledConfig = Libbox.processTemplate(templateContent)
+                Libbox.checkConfig(compiledConfig)
+                configFile.writeText(compiledConfig)
+                compiledSuccess = true
+            }
+        } catch (_: Exception) {
+        }
+        if (!compiledSuccess) {
+            configFile.writeText("""{"outbounds":[{"type":"direct","tag":"direct"}]}""")
+        }
+
+        ProfileManager.create(profile, andSelect = true)
         return profile
     }
 }
