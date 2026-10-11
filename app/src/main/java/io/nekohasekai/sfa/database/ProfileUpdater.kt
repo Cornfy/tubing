@@ -62,9 +62,10 @@ object ProfileUpdater {
                 }
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
-                typed.templateError = Application.application.getString(R.string.profile_template_compile_failed)
+                typed.templateError = Application.application.getString(R.string.profile_template_compile_failed) +
+                    (error.message?.let { "\n$it" } ?: "")
                 if (!initial) {
-                    ProfileManager.update(profile)
+                    persistStatus(profile)
                     throw IllegalStateException(typed.templateError)
                 }
                 ready = false
@@ -81,7 +82,15 @@ object ProfileUpdater {
         } else {
             typed.lastUpdated = Date(0)
         }
-        if (!initial) ProfileManager.update(profile)
+        if (!initial) persistStatus(profile)
         return changed
+    }
+
+    private suspend fun persistStatus(profile: Profile) {
+        // 下载期间用户可能修改名称或更新设置，只写回编译结果，保留这些修改。
+        val latest = ProfileManager.get(profile.id) ?: error("Profile not found")
+        latest.typed.lastUpdated = profile.typed.lastUpdated
+        latest.typed.templateError = profile.typed.templateError
+        ProfileManager.update(latest)
     }
 }

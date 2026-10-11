@@ -143,9 +143,13 @@ jobs:
           import base64, os, pathlib
           for name in ('RELEASE_KEYSTORE_BASE64', 'KEYSTORE_PASS', 'ALIAS_NAME', 'ALIAS_PASS'):
               if not os.environ.get(name): raise SystemExit(f'Missing signing secret: {name}')
-          pathlib.Path('app/release.keystore').write_bytes(base64.b64decode(os.environ['RELEASE_KEYSTORE_BASE64'], validate=True))
+          encoded = ''.join(os.environ['RELEASE_KEYSTORE_BASE64'].split())
+          pathlib.Path('app/release.keystore').write_bytes(base64.b64decode(encoded, validate=True))
           def escape(value):
-              return value.replace('\\', '\\\\').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t').replace(' ', '\\ ')
+              value = value.replace('\\', '\\\\').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t').replace(' ', '\\ ')
+              units = value.encode('utf-16-be')
+              return ''.join(chr(unit) if unit < 128 else '\\u%04x' % unit
+                             for unit in (int.from_bytes(units[i:i+2], 'big') for i in range(0, len(units), 2)))
           pathlib.Path('local.properties').write_text(''.join(f'{name}={escape(os.environ[name])}\n' for name in ('KEYSTORE_PASS', 'ALIAS_NAME', 'ALIAS_PASS')))
           PY
 
@@ -160,7 +164,11 @@ jobs:
       - name: 整理 APK 和更新元数据
         run: |
           mkdir -p release_assets
-          cp app/build/outputs/apk/other/release/*.apk release_assets/
+          if [[ "$PUBLISH" == true ]]; then
+            cp app/build/outputs/apk/other/release/*.apk release_assets/
+          else
+            cp app/build/outputs/apk/other/release/*-arm64-v8a.apk release_assets/
+          fi
           python3 - <<'PY'
           import json, os, pathlib, subprocess
           properties = dict(line.split('=', 1) for line in pathlib.Path('version.properties').read_text().splitlines() if '=' in line)

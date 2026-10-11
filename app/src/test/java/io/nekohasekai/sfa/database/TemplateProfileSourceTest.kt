@@ -33,7 +33,8 @@ class TemplateProfileSourceTest {
     fun noUsableSubscriptionsRemainDrafts() {
         assertFalse(TemplateProfileSource.hasSubscriptions("{}"))
         assertFalse(TemplateProfileSource.hasSubscriptions("""{"_extra":{"sub_urls":[["name",""],"https://"]}}"""))
-        assertTrue(TemplateProfileSource.hasSubscriptions("""{"_extra":{"sub_urls":["https://example.invalid/a"]}}"""))
+        assertFalse(TemplateProfileSource.hasSubscriptions("""{"_extra":{"sub_urls":["https://example.invalid/a"]}}"""))
+        assertTrue(TemplateProfileSource.hasSubscriptions("""{"_extra":{"sub_urls":[["name","https://example.invalid/a"]]}}"""))
     }
 
     @Test(expected = org.json.JSONException::class)
