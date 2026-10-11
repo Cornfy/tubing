@@ -750,4 +750,6 @@
     <string name="profile_template_pending">Template saved; no usable subscription URLs. Direct placeholder is active.</string>
     <string name="profile_template_compile_failed">Template saved, but subscriptions could not be compiled. The previous configuration is retained when available.</string>
     <string name="tubing_fork_notice">Tubing is a third-party SFA fork. Report Tubing issues to Cornfy/tubing; upstream documentation and attribution remain available.</string>
+    <string name="save_template_json">Export template (.json)</string>
+    <string name="share_template_json">Share template (.json)</string>
 </resources>

@@ -679,4 +679,6 @@
     <string name="profile_template_pending">模板已保存，尚无有效订阅地址，当前使用直连占位配置。</string>
     <string name="profile_template_compile_failed">模板已保存，但订阅获取或配置编译失败；已有可用配置会保留。</string>
     <string name="tubing_fork_notice">Tubing 是基于 SFA 的第三方修改版。请向 Cornfy/tubing 反馈本版本问题；上游文档和作者信息仍保留。</string>
+    <string name="save_template_json">导出模板（.json）</string>
+    <string name="share_template_json">分享模板（.json）</string>
 </resources>

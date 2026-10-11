@@ -47,10 +47,14 @@ suspend fun Context.shareProfile(profile: Profile) {
     }
 }
 
-suspend fun Context.shareProfileAsJson(profile: Profile) {
+suspend fun Context.shareProfileAsJson(profile: Profile, template: Boolean = false) {
     val configDirectory = File(cacheDir, "share").also { it.mkdirs() }
-    val jsonFile = File(configDirectory, "${profile.name}.json")
-    jsonFile.writeText(File(profile.typed.path).readText())
+    require(!template || profile.typed.type == TypedProfile.Type.Template)
+    // 模板源文件包含订阅信息，只有明确选择分享模板时才导出。
+    val suffix = if (template) ".template.json" else ".json"
+    val jsonFile = File(configDirectory, "${profile.name}$suffix")
+    val sourcePath = if (template) profile.typed.templatePath else profile.typed.path
+    jsonFile.writeText(File(sourcePath).readText())
     val uri = FileProvider.getUriForFile(this, "$packageName.cache", jsonFile)
     withContext(Dispatchers.Main) {
         startActivity(

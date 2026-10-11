@@ -213,6 +213,42 @@ fun ProfilesCard(
         }
     }
 
+    var templateExportProfile by remember { mutableStateOf<Profile?>(null) }
+
+    val saveTemplateFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        val selectedProfile = templateExportProfile
+        templateExportProfile = null
+        if (uri != null) {
+            if (selectedProfile != null) {
+                coroutineScope.launch(Dispatchers.IO) {
+                    try {
+                        val jsonContent = File(selectedProfile.typed.templatePath).readText()
+                        requireNotNull(context.contentResolver.openOutputStream(uri)) { "Unable to open export file" }.use { outputStream ->
+                            outputStream.write(jsonContent.toByteArray())
+                        }
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.success_profile_saved),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.failed_save_profile, e.message),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     val selectedProfile = profiles.find { it.id == selectedProfileId }
 
     Card(
@@ -325,6 +361,25 @@ fun ProfilesCard(
                             coroutineScope.launch(Dispatchers.IO) {
                                 try {
                                     context.shareProfileAsJson(it)
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        context.errorDialogBuilder(e).show()
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    onSaveTemplate = {
+                        selectedProfile?.let {
+                            templateExportProfile = it
+                            saveTemplateFileLauncher.launch("${it.name}.template.json")
+                        }
+                    },
+                    onShareTemplate = {
+                        selectedProfile?.let {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    context.shareProfileAsJson(it, template = true)
                                 } catch (e: Exception) {
                                     withContext(Dispatchers.Main) {
                                         context.errorDialogBuilder(e).show()
@@ -712,6 +767,8 @@ private fun ProfileActionRow(
     onSaveFile: () -> Unit,
     onSaveJson: () -> Unit,
     onShareJson: () -> Unit,
+    onSaveTemplate: () -> Unit,
+    onShareTemplate: () -> Unit,
     onShareURL: () -> Unit,
     onShareQRS: () -> Unit,
 ) {
@@ -746,6 +803,8 @@ private fun ProfileActionRow(
             onSaveFile = onSaveFile,
             onSaveJson = onSaveJson,
             onShareJson = onShareJson,
+            onSaveTemplate = onSaveTemplate,
+            onShareTemplate = onShareTemplate,
             onShareURL = onShareURL,
             onShareQRS = onShareQRS,
         )
@@ -805,6 +864,8 @@ private fun ShareButton(
     onSaveFile: () -> Unit,
     onSaveJson: () -> Unit,
     onShareJson: () -> Unit,
+    onSaveTemplate: () -> Unit,
+    onShareTemplate: () -> Unit,
     onShareURL: () -> Unit,
     onShareQRS: () -> Unit,
 ) {
@@ -877,6 +938,24 @@ private fun ShareButton(
                     )
                 },
             )
+            if (profile.typed.type == TypedProfile.Type.Template) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.save_template_json)) },
+                    onClick = {
+                        expanded = false
+                        onSaveTemplate()
+                    },
+                    leadingIcon = { Icon(Icons.Default.Save, contentDescription = null) },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.share_template_json)) },
+                    onClick = {
+                        expanded = false
+                        onShareTemplate()
+                    },
+                    leadingIcon = { Icon(Icons.Default.IosShare, contentDescription = null) },
+                )
+            }
             if (profile.typed.type == TypedProfile.Type.Remote) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.profile_share_url)) },
