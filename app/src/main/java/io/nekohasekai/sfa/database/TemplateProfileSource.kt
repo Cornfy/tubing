@@ -31,7 +31,6 @@ object TemplateProfileSource {
         return (0 until urls.length()).any { index ->
             val record = urls.opt(index)
             val url = when (record) {
-                is String -> record
                 is JSONArray -> record.optString(1)
                 else -> ""
             }

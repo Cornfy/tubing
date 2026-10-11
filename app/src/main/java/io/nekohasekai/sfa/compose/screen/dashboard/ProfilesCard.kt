@@ -680,7 +680,7 @@ private fun ProfileInfoRow(profile: Profile?) {
             )
         }
 
-        if (profile.typed.type == TypedProfile.Type.Remote || profile.typed.type == TypedProfile.Type.Template) {
+        if ((profile.typed.type == TypedProfile.Type.Remote || profile.typed.type == TypedProfile.Type.Template) && profile.typed.lastUpdated.time > 0L) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),

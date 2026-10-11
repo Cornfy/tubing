@@ -596,22 +596,22 @@ fun NewProfileScreen(
                         }
 
                         if (uiState.profileType == ProfileType.Remote) {
-                        OutlinedTextField(
-                            value = uiState.remoteUrl,
-                            onValueChange = viewModel::updateRemoteUrl,
-                            label = { Text(stringResource(R.string.profile_url)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            isError = uiState.remoteUrlError != null,
-                            supportingText = {
-                                uiState.remoteUrlError?.let { error ->
-                                    Text(
-                                        text = error,
-                                        color = MaterialTheme.colorScheme.error,
-                                    )
-                                }
-                            },
-                        )
+                            OutlinedTextField(
+                                value = uiState.remoteUrl,
+                                onValueChange = viewModel::updateRemoteUrl,
+                                label = { Text(stringResource(R.string.profile_url)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                isError = uiState.remoteUrlError != null,
+                                supportingText = {
+                                    uiState.remoteUrlError?.let { error ->
+                                        Text(
+                                            text = error,
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
+                                    }
+                                },
+                            )
 
                         }
 
