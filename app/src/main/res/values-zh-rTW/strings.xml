@@ -675,4 +675,6 @@
     <string name="taildrop_dismiss">關閉</string>
     <string name="taildrop_open_app">開啟 sing-box</string>
     <string name="taildrop_notification_title">正在傳送檔案</string>
+    <string name="save_template_json">匯出範本（.json）</string>
+    <string name="share_template_json">分享範本（.json）</string>
 </resources>
