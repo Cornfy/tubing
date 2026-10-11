@@ -73,6 +73,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: 配置 Android command-line tools
+        uses: android-actions/setup-android@v3
+
       - name: 安装构建所需 SDK 与 NDK
         run: |
           set -euo pipefail
