@@ -10,10 +10,10 @@ import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.bg.UpdateProfileWork
 import io.nekohasekai.sfa.database.Profile
+import io.nekohasekai.sfa.database.ProfileUpdater
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
-import io.nekohasekai.sfa.utils.HTTPClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -215,7 +215,7 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
                 ProfileManager.update(profile)
 
                 // Reconfigure updater if auto-update was enabled
-                if (autoUpdateChanged && state.autoUpdate) {
+                if (autoUpdateChanged || state.autoUpdateInterval != state.originalAutoUpdateInterval) {
                     UpdateProfileWork.reconfigureUpdater()
                 }
 
@@ -246,7 +246,7 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
         val state = _uiState.value
         val profile = state.profile ?: return
 
-        if (profile.typed.type != TypedProfile.Type.Remote) return
+        if (profile.typed.type != TypedProfile.Type.Remote && profile.typed.type != TypedProfile.Type.Template) return
 
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isUpdating = true) }
@@ -254,22 +254,7 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 var selectedProfileUpdated = false
 
-                // Fetch remote config
-                val content = HTTPClient().use { it.getString(profile.typed.remoteURL) }
-                Libbox.checkConfig(content)
-
-                // Check if content changed
-                val file = File(profile.typed.path)
-                if (!file.exists() || file.readText() != content) {
-                    file.writeText(content)
-                    if (profile.id == Settings.selectedProfile) {
-                        selectedProfileUpdated = true
-                    }
-                }
-
-                // Update last updated time
-                profile.typed.lastUpdated = Date()
-                ProfileManager.update(profile)
+                selectedProfileUpdated = ProfileUpdater.refresh(profile) && profile.id == Settings.selectedProfile
 
                 // Update UI state with success indicator
                 _uiState.update {
@@ -313,7 +298,7 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
 
         return try {
             // Read the configuration file
-            val configFile = File(profile.typed.path)
+            val configFile = File(if (profile.typed.type == TypedProfile.Type.Template) profile.typed.templatePath else profile.typed.path)
             if (!configFile.exists()) {
                 Toast.makeText(context, "Configuration file not found", Toast.LENGTH_SHORT).show()
                 return null
@@ -321,7 +306,8 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
 
             val content = configFile.readText()
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val fileName = "${profile.name.replace(" ", "_")}_$timestamp.json"
+            val suffix = if (profile.typed.type == TypedProfile.Type.Template) ".template.json" else ".json"
+            val fileName = "${profile.name.replace(" ", "_")}_$timestamp$suffix"
 
             // Store content for later when user picks location
             pendingExportContent = content

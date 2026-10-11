@@ -10,12 +10,10 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.Application
+import io.nekohasekai.sfa.database.ProfileUpdater
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
-import io.nekohasekai.sfa.utils.HTTPClient
-import java.io.File
-import java.util.Date
 import java.util.concurrent.TimeUnit
 
 class UpdateProfileWork {
@@ -34,7 +32,7 @@ class UpdateProfileWork {
         private suspend fun reconfigureUpdater0() {
             val remoteProfiles =
                 ProfileManager.list()
-                    .filter { it.typed.type == TypedProfile.Type.Remote && it.typed.autoUpdate }
+                    .filter { (it.typed.type == TypedProfile.Type.Remote || it.typed.type == TypedProfile.Type.Template) && it.typed.autoUpdate }
             if (remoteProfiles.isEmpty()) {
                 WorkManager.getInstance(Application.application).cancelUniqueWork(WORK_NAME)
                 return
@@ -64,7 +62,7 @@ class UpdateProfileWork {
             var selectedProfileUpdated = false
             val remoteProfiles =
                 ProfileManager.list()
-                    .filter { it.typed.type == TypedProfile.Type.Remote && it.typed.autoUpdate }
+                    .filter { (it.typed.type == TypedProfile.Type.Remote || it.typed.type == TypedProfile.Type.Template) && it.typed.autoUpdate }
             if (remoteProfiles.isEmpty()) return Result.success()
             var success = true
             val selectedProfile = Settings.selectedProfile
@@ -75,17 +73,8 @@ class UpdateProfileWork {
                     continue
                 }
                 try {
-                    val content = HTTPClient().use { it.getString(profile.typed.remoteURL) }
-                    Libbox.checkConfig(content)
-                    val file = File(profile.typed.path)
-                    if (file.readText() != content) {
-                        File(profile.typed.path).writeText(content)
-                        if (profile.id == selectedProfile) {
-                            selectedProfileUpdated = true
-                        }
-                    }
-                    profile.typed.lastUpdated = Date()
-                    ProfileManager.update(profile)
+                    val contentChanged = ProfileUpdater.refresh(profile)
+                    if (contentChanged && profile.id == selectedProfile) selectedProfileUpdated = true
                 } catch (e: Exception) {
                     Log.e(TAG, "update profile ${profile.name}", e)
                     success = false

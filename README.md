@@ -1,6 +1,16 @@
-# SFA
+# Tubing
 
-Experimental Android client for sing-box, the universal proxy platform.
+Third-party Android client based on SFA, with native sub-tools template support.
+
+Project and issue reports: https://github.com/Cornfy/tubing
+
+Upstream SFA: https://github.com/SagerNet/sing-box-for-android
+
+Templates retain their source separately from generated configurations. Empty subscriptions use a direct placeholder; fetch failures retain the last working configuration. Template sources can be exported from the profile editor and imported again.
+
+The `feat/template-profile` branch carries individual patches on the SFA 1.14.3 stable commit. `release/template` squashes those changes for release builds. Manually dispatch the workflow with `publish=false` to validate a feature branch without publishing a release. Release-branch pushes build all Android ABIs and publish APKs plus Tubing update metadata.
+
+The workflow pins the compatible core revision in `CORE_REF`; update it when integrating new core features. Application ID is currently unchanged. Back up/export configurations before any future application ID migration.
 
 ## Documentation
 

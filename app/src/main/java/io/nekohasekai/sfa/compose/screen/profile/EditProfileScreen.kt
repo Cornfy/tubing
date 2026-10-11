@@ -304,7 +304,7 @@ fun EditProfileScreen(
                 }
 
                 // Remote Profile Options
-                if (uiState.profileType == TypedProfile.Type.Remote) {
+                if (uiState.profileType == TypedProfile.Type.Remote || uiState.profileType == TypedProfile.Type.Template) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors =
@@ -339,7 +339,7 @@ fun EditProfileScreen(
                                             style = MaterialTheme.typography.titleSmall,
                                             color = MaterialTheme.colorScheme.tertiary,
                                         )
-                                        uiState.lastUpdated?.let { lastUpdated ->
+                                        uiState.lastUpdated?.takeIf { it.time > 0L }?.let { lastUpdated ->
                                             Text(
                                                 text =
                                                 stringResource(
@@ -385,13 +385,16 @@ fun EditProfileScreen(
                                 }
                             }
 
-                            OutlinedTextField(
-                                value = uiState.remoteUrl,
-                                onValueChange = viewModel::updateRemoteUrl,
-                                label = { Text(stringResource(R.string.profile_url)) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                            )
+                            if (uiState.profileType == TypedProfile.Type.Remote) {
+                                OutlinedTextField(
+                                    value = uiState.remoteUrl,
+                                    onValueChange = viewModel::updateRemoteUrl,
+                                    label = { Text(stringResource(R.string.profile_url)) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                )
+
+                            }
 
                             HorizontalDivider()
 

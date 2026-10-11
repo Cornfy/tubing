@@ -8,6 +8,8 @@ import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.bg.UpdateProfileWork
 import io.nekohasekai.sfa.database.Profile
+import io.nekohasekai.sfa.database.ProfileUpdater
+import io.nekohasekai.sfa.database.TemplateProfileSource
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.utils.HTTPClient
@@ -30,6 +32,8 @@ data class NewProfileUiState(
     val remoteUrl: String = "",
     val autoUpdate: Boolean = true,
     val autoUpdateInterval: Int = 60,
+    // Template profile fields
+    val templateSubUrls: List<String> = listOf(""),
     // File import
     val importUri: Uri? = null,
     val importFileName: String? = null,
@@ -50,6 +54,7 @@ data class NewProfileUiState(
 enum class ProfileType {
     Local,
     Remote,
+    Template,
 }
 
 enum class ProfileSource {
@@ -119,6 +124,36 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
         _uiState.update { it.copy(autoUpdate = enabled) }
     }
 
+    fun updateTemplateSubUrl(index: Int, url: String) {
+        _uiState.update { state ->
+            val updated = state.templateSubUrls.toMutableList()
+            if (index in updated.indices) {
+                updated[index] = url
+            }
+            state.copy(templateSubUrls = updated)
+        }
+    }
+
+    fun addTemplateSubUrl() {
+        _uiState.update { state ->
+            state.copy(templateSubUrls = state.templateSubUrls + "")
+        }
+    }
+
+    fun removeTemplateSubUrl(index: Int) {
+        _uiState.update { state ->
+            if (state.templateSubUrls.size <= 1) {
+                state.copy(templateSubUrls = listOf(""))
+            } else {
+                val updated = state.templateSubUrls.toMutableList()
+                if (index in updated.indices) {
+                    updated.removeAt(index)
+                }
+                state.copy(templateSubUrls = updated)
+            }
+        }
+    }
+
     fun updateAutoUpdateInterval(interval: String) {
         val intValue = interval.toIntOrNull() ?: 60
         _uiState.update { it.copy(autoUpdateInterval = intValue.coerceAtLeast(15)) }
@@ -167,7 +202,7 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
 
         // Validate based on profile type
         when (state.profileType) {
-            ProfileType.Local -> {
+            ProfileType.Local, ProfileType.Template -> {
                 if (state.profileSource == ProfileSource.Import && state.importUri == null && state.qrsData == null) {
                     _uiState.update { it.copy(importError = context.getString(R.string.profile_input_required)) }
                     hasError = true
@@ -201,6 +236,7 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
                         when (state.profileType) {
                             ProfileType.Local -> createLocalProfile(state)
                             ProfileType.Remote -> createRemoteProfile(state)
+                            ProfileType.Template -> createTemplateProfile(state)
                         }
                     }
 
@@ -314,6 +350,61 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
             UpdateProfileWork.reconfigureUpdater()
         }
 
+        return profile
+    }
+
+    private suspend fun createTemplateProfile(state: NewProfileUiState): Profile {
+        val context = getApplication<Application>()
+        val typedProfile =
+            TypedProfile().apply {
+                type = TypedProfile.Type.Template
+                autoUpdate = state.autoUpdate
+                autoUpdateInterval = state.autoUpdateInterval
+            }
+
+        val profile =
+            Profile(name = state.name, typed = typedProfile).apply {
+                userOrder = ProfileManager.nextOrder()
+            }
+
+        val fileID = ProfileManager.nextFileID()
+        val configDirectory = File(context.filesDir, "configs").also { it.mkdirs() }
+        val configFile = File(configDirectory, "$fileID.json")
+        typedProfile.path = configFile.path
+
+        // Get template content
+        var templateContent =
+            when (state.profileSource) {
+                ProfileSource.CreateNew -> "{}"
+                ProfileSource.Import -> {
+                    if (state.qrsData != null) {
+                        val content = Libbox.decodeProfileContent(state.qrsData)
+                        content.config
+                    } else {
+                        state.importUri?.let { uri ->
+                            val sourceURL = uri.toString()
+                            when {
+                                sourceURL.startsWith("content://") -> {
+                                    val inputStream = context.contentResolver.openInputStream(uri) as InputStream
+                                    inputStream.use { it.bufferedReader().readText() }
+                                }
+                                sourceURL.startsWith("file://") -> {
+                                    File(Uri.parse(sourceURL).path!!).readText()
+                                }
+                                sourceURL.startsWith("http://") || sourceURL.startsWith("https://") -> {
+                                    HTTPClient().use { it.getString(sourceURL) }
+                                }
+                                else -> throw Exception("Unsupported source: $sourceURL")
+                            }
+                        } ?: "{}"
+                    }
+                }
+            }
+
+        templateContent = TemplateProfileSource.overrideSubscriptions(templateContent, state.templateSubUrls)
+        ProfileUpdater.saveTemplate(profile, templateContent, initial = true)
+        ProfileManager.create(profile, andSelect = true)
+        if (typedProfile.autoUpdate) UpdateProfileWork.reconfigureUpdater()
         return profile
     }
 }

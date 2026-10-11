@@ -309,6 +309,7 @@ fun SettingsScreen(navController: NavController) {
                             style = MaterialTheme.typography.bodyLarge,
                         )
                     },
+                    supportingContent = { Text(stringResource(R.string.tubing_fork_notice)) },
                     leadingContent = {
                         Icon(
                             imageVector = Icons.Outlined.Code,
@@ -328,7 +329,7 @@ fun SettingsScreen(navController: NavController) {
                         .clickable {
                             val intent = android.content.Intent(android.content.Intent.ACTION_VIEW)
                             intent.data =
-                                android.net.Uri.parse("https://github.com/SagerNet/sing-box-for-android")
+                                android.net.Uri.parse("https://github.com/Cornfy/tubing")
                             context.startActivity(intent)
                         },
                     colors =
