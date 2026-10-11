@@ -16,6 +16,7 @@ concurrency:
 
 env:
   CORE_REF: 8325013970ca563cb6f5a2ed9c8548661103d02a
+  CORE_BASE_TAG: v1.14.3
   SFA_BASE_REF: ae93152f21457723af77d144f28c1f7be7362aec
   GOTOOLCHAIN: local
   GOFLAGS: -p=2
@@ -59,7 +60,9 @@ jobs:
               env.write(f"GO_VERSION={properties['GO_VERSION'].removeprefix('go')}\nVERSION_TAG=v{version}\n")
           PY
           git clone https://github.com/Cornfy/sing-box.git sing-box-core
+          git -C sing-box-core fetch https://github.com/SagerNet/sing-box.git "refs/tags/$CORE_BASE_TAG:refs/tags/$CORE_BASE_TAG"
           git -C sing-box-core checkout --detach "$CORE_REF"
+          git -C sing-box-core merge-base --is-ancestor "$CORE_BASE_TAG" HEAD
 
       - name: 配置 Go
         uses: actions/setup-go@v6
@@ -94,7 +97,10 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           export PATH="$(go env GOPATH)/bin:$PATH"
           gomobile init
-          BASE_TAG=$(git describe --tags --abbrev=0)
+          # init 会重新安装最新 gobind；恢复为内核依赖的确切版本。
+          go install "github.com/sagernet/gomobile/cmd/gobind@$MOBILE_VERSION"
+          BASE_TAG="$CORE_BASE_TAG"
+          echo "Core baseline: $BASE_TAG"
           [[ "$BASE_TAG" =~ ^v1\.14\.[0-9]+$ ]]
           CORE_COUNT=$(git rev-list --count "$BASE_TAG..HEAD")
           CORE_HASH=$(git rev-parse --short HEAD)
