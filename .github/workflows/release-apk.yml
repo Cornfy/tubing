@@ -75,6 +75,9 @@ jobs:
 
       - name: 配置 Android command-line tools
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
 
       - name: 安装构建所需 SDK 与 NDK
         run: |
@@ -156,7 +159,9 @@ jobs:
           import json, os, pathlib, subprocess
           properties = dict(line.split('=', 1) for line in pathlib.Path('version.properties').read_text().splitlines() if '=' in line)
           apk = next(pathlib.Path('release_assets').glob('*.apk'))
-          analyzer = pathlib.Path(os.environ['ANDROID_HOME'])/'cmdline-tools/latest/bin/apkanalyzer'
+          import shutil
+          analyzer = shutil.which('apkanalyzer')
+          assert analyzer, 'apkanalyzer not found'
           def manifest(field):
               return subprocess.check_output([str(analyzer), 'manifest', field, str(apk)], text=True).strip()
           assert int(manifest('version-code')) == int(properties['VERSION_CODE'])
