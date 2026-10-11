@@ -2,105 +2,190 @@ name: Release Tubing (Template Edition)
 
 on:
   push:
-    branches:
-      - release/template
+    branches: [release/template]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 发布正式 Release（仅 release/template 可发布）
+        type: boolean
+        default: false
+
+concurrency:
+  group: tubing-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CORE_REF: 8325013970ca563cb6f5a2ed9c8548661103d02a
+  SFA_BASE_REF: ae93152f21457723af77d144f28c1f7be7362aec
+  GOTOOLCHAIN: local
+  GOFLAGS: -p=2
+  GOMAXPROCS: 2
 
 jobs:
-  build-release:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
     permissions:
       contents: write
-
     steps:
-      - name: ⬇️ 检出 SFA 客户端源码
-        uses: actions/checkout@v4
+      - name: 检出客户端
+        uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: 🏷️ 自动生成版本号
-        id: version_gen
+      - name: 确定构建模式、版本与工具链
         run: |
-          DATE_STR=$(date +'%Y.%m.%d')
-          VERSION_TAG="v${DATE_STR}-b${{ github.run_number }}"
-          echo "VERSION_TAG=${VERSION_TAG}" >> $GITHUB_ENV
-          echo "Generated version tag: ${VERSION_TAG}"
+          set -euo pipefail
+          PUBLISH=false
+          if [[ "$GITHUB_REF" == refs/heads/release/template && ( "$GITHUB_EVENT_NAME" == push || "${{ inputs.publish }}" == true ) ]]; then
+            PUBLISH=true
+          fi
+          echo "PUBLISH=$PUBLISH" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import os, pathlib, subprocess
+          properties = dict(line.split('=', 1) for line in pathlib.Path('version.properties').read_text().splitlines() if '=' in line)
+          base = properties['VERSION_NAME']
+          if not base.startswith('1.14.') or '-' in base:
+              raise SystemExit('Client baseline must be a stable 1.14.x release')
+          count = subprocess.check_output(['git', 'rev-list', '--count', os.environ['SFA_BASE_REF']+'..HEAD'], text=True).strip()
+          revision = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], text=True).strip()
+          version = f"{base}-r{count}-g{revision}-template-b{os.environ['GITHUB_RUN_NUMBER']}"
+          code = 1000000 + int(os.environ['GITHUB_RUN_NUMBER'])
+          properties.update(VERSION_NAME=version, VERSION_CODE=str(code))
+          pathlib.Path('version.properties').write_text(''.join(f'{key}={value}\n' for key, value in properties.items()))
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f"GO_VERSION={properties['GO_VERSION'].removeprefix('go')}\nVERSION_TAG=v{version}\n")
+          PY
+          git clone https://github.com/Cornfy/sing-box.git sing-box-core
+          git -C sing-box-core checkout --detach "$CORE_REF"
 
-      - name: 🐹 配置 Go 编译环境
-        uses: actions/setup-go@v5
+      - name: 配置 Go
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
-          cache: true
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: sing-box-core/go.sum
 
-      - name: ☕ 配置 JDK 17
-        uses: actions/setup-java@v4
+      - name: 配置 JDK 17
+        uses: actions/setup-java@v5
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
-      - name: 📱 安装项目指定 NDK
+      - name: 安装构建所需 SDK 与 NDK
         run: |
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;28.0.13004108" > /dev/null
+          set -euo pipefail
+          sdkmanager --install 'platforms;android-37.1' 'ndk;28.0.13004108'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.0.13004108" >> "$GITHUB_ENV"
 
-      - name: ⚙️ 编译 libbox.aar
+      - name: 编译模板内核 AAR
+        working-directory: sing-box-core
         run: |
-          go install github.com/sagernet/gomobile/cmd/gomobile@latest
-          export PATH=$(go env GOPATH)/bin:$PATH
+          set -euo pipefail
+          MOBILE_VERSION=$(go list -m -f '{{.Version}}' github.com/sagernet/gomobile)
+          go install "github.com/sagernet/gomobile/cmd/gomobile@$MOBILE_VERSION" "github.com/sagernet/gomobile/cmd/gobind@$MOBILE_VERSION"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          export PATH="$(go env GOPATH)/bin:$PATH"
           gomobile init
-
-          git clone -b feat/subtool-template https://github.com/Cornfy/sing-box.git sing-box-core
-          cd sing-box-core
-
-          # 计算核心版本号
-          BASE_VERSION="1.14.0"
-          COMMIT_COUNT=$(git rev-list --count HEAD 2>/dev/null || echo "0")
-          COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-          CORE_VERSION="${BASE_VERSION}-r${COMMIT_COUNT}-g${COMMIT_HASH}-template"
-          echo "Building libbox with Core Version: ${CORE_VERSION}"
-
-          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.0.13004108
-
-          # 注入版本号编译 .aar
-          go run -ldflags "-X github.com/sagernet/sing-box/constant.Version=${CORE_VERSION}" ./cmd/internal/build_libbox -target android
-
+          BASE_TAG=$(git describe --tags --abbrev=0)
+          [[ "$BASE_TAG" =~ ^v1\.14\.[0-9]+$ ]]
+          CORE_COUNT=$(git rev-list --count "$BASE_TAG..HEAD")
+          CORE_HASH=$(git rev-parse --short HEAD)
+          export TUBING_CORE_VERSION="${BASE_TAG#v}-r${CORE_COUNT}-g${CORE_HASH}-template"
+          echo "CORE_VERSION=$TUBING_CORE_VERSION" >> "$GITHUB_ENV"
+          # overlay 仅替换构建工具的版本读取，最终版本由工具传入 gomobile 的链接参数。
+          python3 - <<'PY'
+          import json, pathlib
+          original = pathlib.Path('cmd/internal/build_shared/tag.go').resolve()
+          source = original.read_text().replace('import (', 'import (\n\t"os"', 1)
+          source = source.replace('func ReadTag() (string, error) {', 'func ReadTag() (string, error) {\n\tif version := os.Getenv("TUBING_CORE_VERSION"); version != "" { return version, nil }', 1)
+          cache = pathlib.Path('.cache/tubing-build').resolve()
+          cache.mkdir(parents=True, exist_ok=True)
+          replacement = cache/'tag.go'
+          replacement.write_text(source)
+          (cache/'overlay.json').write_text(json.dumps({'Replace': {str(original): str(replacement)}}))
+          PY
+          PLATFORM=()
+          if [[ "$PUBLISH" != true ]]; then PLATFORM=(-platform android/arm64); fi
+          go run -overlay=.cache/tubing-build/overlay.json ./cmd/internal/build_libbox -target android "${PLATFORM[@]}"
           mkdir -p ../app/libs
-          cp libbox.aar ../app/libs/libbox.aar
+          cp libbox.aar libbox-legacy.aar ../app/libs/
+          python3 - <<'PYCORE'
+          import os, zipfile
+          expected = os.environ['TUBING_CORE_VERSION'].encode()
+          with zipfile.ZipFile('libbox.aar') as archive:
+              libraries = [name for name in archive.namelist() if name.endswith('/libbox.so')]
+              assert libraries, 'AAR contains no libbox native library'
+              assert all(expected in archive.read(name) for name in libraries), 'Native core version injection failed'
+          PYCORE
 
-      - name: 🔑 注入个人 Release 签名证书
+      - name: 注入发布签名
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          ALIAS_NAME: ${{ secrets.ALIAS_NAME }}
+          ALIAS_PASS: ${{ secrets.ALIAS_PASS }}
         run: |
-          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
-          cat << EOF > local.properties
-          KEYSTORE_PASS=${{ secrets.KEYSTORE_PASS }}
-          ALIAS_NAME=${{ secrets.ALIAS_NAME }}
-          ALIAS_PASS=${{ secrets.ALIAS_PASS }}
-          EOF
+          python3 - <<'PY'
+          import base64, os, pathlib
+          for name in ('RELEASE_KEYSTORE_BASE64', 'KEYSTORE_PASS', 'ALIAS_NAME', 'ALIAS_PASS'):
+              if not os.environ.get(name): raise SystemExit(f'Missing signing secret: {name}')
+          pathlib.Path('app/release.keystore').write_bytes(base64.b64decode(os.environ['RELEASE_KEYSTORE_BASE64'], validate=True))
+          def escape(value):
+              return value.replace('\\', '\\\\').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t').replace(' ', '\\ ')
+          pathlib.Path('local.properties').write_text(''.join(f'{name}={escape(os.environ[name])}\n' for name in ('KEYSTORE_PASS', 'ALIAS_NAME', 'ALIAS_PASS')))
+          PY
 
-      - name: ⚡ 配置 Gradle 缓存
-        uses: gradle/actions/setup-gradle@v3
+      - name: 配置 Gradle 缓存
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: 🚀 编译正式版 (Release APK)
+      - name: 单元测试和 APK 编译
         run: |
           chmod +x gradlew
-          ./gradlew assembleOtherRelease --no-daemon
+          ./gradlew testOtherReleaseUnitTest assembleOtherRelease --no-daemon
 
-      - name: 📦 整理正式版 APK
+      - name: 整理 APK 和更新元数据
         run: |
           mkdir -p release_assets
           cp app/build/outputs/apk/other/release/*.apk release_assets/
-          cd release_assets
-          # 重命名文件前缀为 Tubing
-          for f in SFA-*; do
-            [ -f "$f" ] && mv "$f" "${f/SFA-/Tubing-}"
-          done
-          ls -lh
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          properties = dict(line.split('=', 1) for line in pathlib.Path('version.properties').read_text().splitlines() if '=' in line)
+          apk = next(pathlib.Path('release_assets').glob('*.apk'))
+          analyzer = pathlib.Path(os.environ['ANDROID_HOME'])/'cmdline-tools/latest/bin/apkanalyzer'
+          def manifest(field):
+              return subprocess.check_output([str(analyzer), 'manifest', field, str(apk)], text=True).strip()
+          assert int(manifest('version-code')) == int(properties['VERSION_CODE'])
+          assert manifest('version-name') == properties['VERSION_NAME']
+          metadata = {'version_code': int(properties['VERSION_CODE']), 'version_name': properties['VERSION_NAME'],
+                      'application_id': manifest('application-id'), 'client_revision': os.environ['GITHUB_SHA'],
+                      'core_revision': os.environ['CORE_REF'], 'core_version': os.environ['CORE_VERSION']}
+          pathlib.Path('release_assets/Tubing-version-metadata.json').write_text(json.dumps(metadata, indent=2)+'\n')
+          PY
 
-      - name: 🎉 自动发布 GitHub Release 并挂载 APK
-        uses: softprops/action-gh-release@v2
+      - name: 保存验证产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: tubing-${{ github.run_number }}
+          path: |
+            release_assets/
+            app/build/reports/tests/
+          if-no-files-found: error
+
+      - name: 发布正式 Release
+        if: env.PUBLISH == 'true'
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.VERSION_TAG }}
-          name: "Tubing Release ${{ env.VERSION_TAG }}"
-          files: release_assets/*.apk
+          target_commitish: ${{ github.sha }}
+          name: Tubing ${{ env.VERSION_TAG }}
+          files: release_assets/*
+          fail_on_unmatched_files: true
           generate_release_notes: true
           draft: false
           prerelease: false
+
+      - name: 清理临时签名文件
+        if: always()
+        run: rm -f app/release.keystore local.properties

@@ -747,4 +747,7 @@
     <string name="endpoint_browser_navigation_failed">Browser navigation failed: %1$s</string>
     <string name="endpoint_browser_too_many_windows">The authentication page opened too many browser windows.</string>
     <string name="endpoint_browser_profile_unavailable">Browser authentication is unavailable on this device.</string>
+    <string name="profile_template_pending">Template saved; no usable subscription URLs. Direct placeholder is active.</string>
+    <string name="profile_template_compile_failed">Template saved, but subscriptions could not be compiled. The previous configuration is retained when available.</string>
+    <string name="tubing_fork_notice">Tubing is a third-party SFA fork. Report Tubing issues to Cornfy/tubing; upstream documentation and attribution remain available.</string>
 </resources>

@@ -6,6 +6,7 @@ import io.nekohasekai.sfa.BuildConfig
 import io.nekohasekai.sfa.ktx.unwrap
 import io.nekohasekai.sfa.update.UpdateInfo
 import io.nekohasekai.sfa.update.UpdateTrack
+import io.nekohasekai.sfa.update.TubingUpdatePolicy
 import io.nekohasekai.sfa.utils.HTTPClient
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -14,8 +15,8 @@ import java.io.Closeable
 
 class GitHubUpdateChecker : Closeable {
     companion object {
-        private const val RELEASES_URL = "https://api.github.com/repos/SagerNet/sing-box/releases"
-        private const val METADATA_FILENAME = "SFA-version-metadata.json"
+        private const val RELEASES_URL = "https://api.github.com/repos/Cornfy/tubing/releases"
+        private const val METADATA_FILENAME = "Tubing-version-metadata.json"
     }
 
     private val client = Libbox.newHTTPClient().apply {
@@ -44,29 +45,25 @@ class GitHubUpdateChecker : Closeable {
             UpdateTrack.STABLE -> listOf(json.decodeFromString<GitHubRelease>(content))
             UpdateTrack.BETA -> json.decodeFromString<List<GitHubRelease>>(content)
         }
-        val release = releases.filter { !it.draft }.reduceOrNull { best, candidate ->
-            if (Libbox.compareSemver(candidate.version, best.version)) candidate else best
-        } ?: return null
-        if (!Libbox.compareSemver(release.version, BuildConfig.VERSION_NAME)) {
-            return null
-        }
-        val metadata = downloadMetadata(release) ?: return null
-
-        val isLegacy = Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-        val apkAsset = release.assets.find { asset ->
-            asset.name.endsWith(".apk") &&
-                !asset.name.contains("play") &&
-                asset.name.contains("legacy-android-5") == isLegacy
-        }
+        val candidates = releases.filter { !it.draft && (track == UpdateTrack.BETA || !it.prerelease) }
+            .mapNotNull { release -> downloadMetadata(release)?.let { release to it } }
+        val (release, metadata) = candidates.maxByOrNull { it.second.versionCode } ?: return null
+        if (metadata.applicationId != BuildConfig.APPLICATION_ID ||
+            !TubingUpdatePolicy.isNewerVersion(metadata.versionCode, BuildConfig.VERSION_CODE)
+        ) return null
+        val isLegacy = Build.VERSION.SDK_INT < Build.VERSION_CODES.N
+        val apkName = TubingUpdatePolicy.selectApkName(release.assets.map { it.name }, Build.SUPPORTED_ABIS.toList(), isLegacy)
+            ?: return null
+        val apkAsset = release.assets.first { it.name == apkName }
 
         return UpdateInfo(
             versionCode = metadata.versionCode,
-            versionName = release.version,
-            downloadUrl = apkAsset?.browserDownloadUrl ?: release.htmlUrl,
+            versionName = metadata.versionName,
+            downloadUrl = apkAsset.browserDownloadUrl,
             releaseUrl = release.htmlUrl,
             releaseNotes = release.body,
             isPrerelease = release.prerelease,
-            fileSize = apkAsset?.size ?: 0,
+            fileSize = apkAsset.size,
         )
     }
 
@@ -111,5 +108,7 @@ class GitHubUpdateChecker : Closeable {
     @Serializable
     data class VersionMetadata(
         @SerialName("version_code") val versionCode: Int = 0,
+        @SerialName("version_name") val versionName: String = "",
+        @SerialName("application_id") val applicationId: String = "",
     )
 }

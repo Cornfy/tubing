@@ -7,6 +7,8 @@ import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.compat.ProfileCodeEditor
 import io.nekohasekai.sfa.compat.ProfileEditorColors
 import io.nekohasekai.sfa.database.Profile
+import io.nekohasekai.sfa.database.ProfileUpdater
+import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.ktx.unwrap
@@ -19,9 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.File
-import java.util.Date
 
 data class EditProfileContentUiState(
     val isLoading: Boolean = false,
@@ -167,7 +167,7 @@ class EditProfileContentViewModel(private val profileId: Long, initialIsReadOnly
                 val targetFile = if (loadedProfile.typed.type == TypedProfile.Type.Template) {
                     val tFile = File(loadedProfile.typed.templatePath)
                     if (!tFile.exists() && File(loadedProfile.typed.path).exists()) {
-                        tFile.writeText(File(loadedProfile.typed.path).readText())
+                        throw IllegalStateException("Template source file not found")
                     }
                     tFile
                 } else {
@@ -208,34 +208,14 @@ class EditProfileContentViewModel(private val profileId: Long, initialIsReadOnly
                         editor?.getText() ?: ""
                     }
 
-                // 1. Strict JSON syntax validation
-                if (currentContent.isNotBlank()) {
-                    try {
-                        JSONObject(currentContent)
-                    } catch (e: Exception) {
-                        throw IllegalArgumentException("Invalid JSON syntax: ${e.message}")
-                    }
-                }
-
-                profile?.let { p ->
-                    if (p.typed.type == TypedProfile.Type.Template) {
-                        // 2. Always save template source safely
-                        File(p.typed.templatePath).writeText(currentContent)
-                        if (currentContent.isNotBlank() && currentContent != "{}") {
-                            try {
-                                val compiled = Libbox.processTemplate(currentContent)
-                                Libbox.checkConfig(compiled)
-                                File(p.typed.path).writeText(compiled)
-
-                                // 3. Update timestamp on successful compile
-                                p.typed.lastUpdated = Date()
-                                ProfileManager.update(p)
-                            } catch (compilationError: Exception) {
-                                throw Exception("Template saved, but subscription fetch failed: ${compilationError.message}")
-                            }
+                profile?.let { currentProfile ->
+                    if (currentProfile.typed.type == TypedProfile.Type.Template) {
+                        val changed = ProfileUpdater.saveTemplate(currentProfile, currentContent)
+                        if (changed && currentProfile.id == Settings.selectedProfile) {
+                            runCatching { Libbox.newStandaloneCommandClient().serviceReload() }
                         }
                     } else {
-                        File(p.typed.path).writeText(currentContent)
+                        ProfileUpdater.writeAtomically(File(currentProfile.typed.path), currentContent)
                     }
                 }
 

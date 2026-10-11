@@ -9,13 +9,13 @@ import io.nekohasekai.sfa.compose.base.BaseViewModel
 import io.nekohasekai.sfa.compose.base.UiEvent
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Profile
+import io.nekohasekai.sfa.database.ProfileUpdater
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.utils.AppLifecycleObserver
 import io.nekohasekai.sfa.utils.CommandClient
 import io.nekohasekai.sfa.utils.CommandTarget
-import io.nekohasekai.sfa.utils.HTTPClient
 import io.nekohasekai.sfa.utils.RemoteControlManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -28,9 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONException
-import java.io.File
 import java.util.Collections
-import java.util.Date
 
 enum class CardGroup(val pairGroup: CardPairGroup? = null) {
     ClashMode,
@@ -353,32 +351,7 @@ class DashboardViewModel :
             }
 
             try {
-                val content = if (profile.typed.type == TypedProfile.Type.Template) {
-                    val templateFile = File(profile.typed.templatePath)
-                    if (!templateFile.exists()) {
-                        throw Exception("Template file not found")
-                    }
-                    val templateContent = templateFile.readText()
-                    val compiled = Libbox.processTemplate(templateContent)
-                    Libbox.checkConfig(compiled)
-                    compiled
-                } else {
-                    val fetched = HTTPClient().use { it.getString(profile.typed.remoteURL) }
-                    Libbox.checkConfig(fetched)
-                    fetched
-                }
-
-                // Check if content changed
-                val file = File(profile.typed.path)
-                var contentChanged = false
-                if (!file.exists() || file.readText() != content) {
-                    file.writeText(content)
-                    contentChanged = true
-                }
-
-                // Update last updated time
-                profile.typed.lastUpdated = Date()
-                ProfileManager.update(profile)
+                val contentChanged = ProfileUpdater.refresh(profile)
 
                 // Reload profiles
                 loadProfiles()

@@ -42,8 +42,10 @@ class TypedProfile() : Parcelable {
     var autoUpdate: Boolean = false
     var autoUpdateInterval = 60
 
+    var templateError: String = ""
+
     val templatePath: String
-        get() = if (path.endsWith(".json")) path.replace(".json", ".template.json") else "$path.template.json"
+        get() = if (path.endsWith(".json")) path.removeSuffix(".json") + ".template.json" else "$path.template.json"
 
 
     constructor(reader: Parcel) : this() {
@@ -56,16 +58,18 @@ class TypedProfile() : Parcelable {
         if (version >= 1) {
             autoUpdateInterval = reader.readInt()
         }
+        if (version >= 2) templateError = reader.readString() ?: ""
     }
 
     override fun writeToParcel(writer: Parcel, flags: Int) {
-        writer.writeInt(1)
+        writer.writeInt(2)
         writer.writeString(path)
         writer.writeInt(type.ordinal)
         writer.writeString(remoteURL)
         writer.writeInt(if (autoUpdate) 1 else 0)
         writer.writeLong(lastUpdated.time)
         writer.writeInt(autoUpdateInterval)
+        writer.writeString(templateError)
     }
 
     override fun describeContents(): Int = 0

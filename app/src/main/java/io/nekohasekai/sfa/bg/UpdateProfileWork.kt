@@ -10,12 +10,10 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.Application
+import io.nekohasekai.sfa.database.ProfileUpdater
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
-import io.nekohasekai.sfa.utils.HTTPClient
-import java.io.File
-import java.util.Date
 import java.util.concurrent.TimeUnit
 
 class UpdateProfileWork {
@@ -75,27 +73,8 @@ class UpdateProfileWork {
                     continue
                 }
                 try {
-                    val content = if (profile.typed.type == TypedProfile.Type.Template) {
-                        val templateFile = File(profile.typed.templatePath)
-                        if (!templateFile.exists()) continue
-                        val templateContent = templateFile.readText()
-                        val compiled = Libbox.processTemplate(templateContent)
-                        Libbox.checkConfig(compiled)
-                        compiled
-                    } else {
-                        val fetched = HTTPClient().use { it.getString(profile.typed.remoteURL) }
-                        Libbox.checkConfig(fetched)
-                        fetched
-                    }
-                    val file = File(profile.typed.path)
-                    if (file.readText() != content) {
-                        File(profile.typed.path).writeText(content)
-                        if (profile.id == selectedProfile) {
-                            selectedProfileUpdated = true
-                        }
-                    }
-                    profile.typed.lastUpdated = Date()
-                    ProfileManager.update(profile)
+                    val contentChanged = ProfileUpdater.refresh(profile)
+                    if (contentChanged && profile.id == selectedProfile) selectedProfileUpdated = true
                 } catch (e: Exception) {
                     Log.e(TAG, "update profile ${profile.name}", e)
                     success = false

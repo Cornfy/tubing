@@ -304,7 +304,7 @@ fun EditProfileScreen(
                 }
 
                 // Remote Profile Options
-                if (uiState.profileType == TypedProfile.Type.Remote) {
+                if (uiState.profileType == TypedProfile.Type.Remote || uiState.profileType == TypedProfile.Type.Template) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors =
@@ -385,6 +385,7 @@ fun EditProfileScreen(
                                 }
                             }
 
+                            if (uiState.profileType == TypedProfile.Type.Remote) {
                             OutlinedTextField(
                                 value = uiState.remoteUrl,
                                 onValueChange = viewModel::updateRemoteUrl,
@@ -392,6 +393,8 @@ fun EditProfileScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
+
+                            }
 
                             HorizontalDivider()
 
