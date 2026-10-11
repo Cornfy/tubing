@@ -8,6 +8,8 @@ import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.bg.UpdateProfileWork
 import io.nekohasekai.sfa.database.Profile
+import io.nekohasekai.sfa.database.ProfileUpdater
+import io.nekohasekai.sfa.database.TemplateProfileSource
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.utils.HTTPClient
@@ -18,8 +20,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
 import java.util.Date
@@ -358,6 +358,8 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
         val typedProfile =
             TypedProfile().apply {
                 type = TypedProfile.Type.Template
+                autoUpdate = state.autoUpdate
+                autoUpdateInterval = state.autoUpdateInterval
             }
 
         val profile =
@@ -369,7 +371,6 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
         val configDirectory = File(context.filesDir, "configs").also { it.mkdirs() }
         val configFile = File(configDirectory, "$fileID.json")
         typedProfile.path = configFile.path
-        val templateFile = File(typedProfile.templatePath)
 
         // Get template content
         var templateContent =
@@ -400,48 +401,10 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
                 }
             }
 
-        // Filter valid URLs entered by user
-        val validUrls = state.templateSubUrls.map { it.trim() }.filter { it.startsWith("http://") || it.startsWith("https://") }
-        if (validUrls.isNotEmpty()) {
-            try {
-                val jsonObject = if (templateContent.isNotBlank() && templateContent != "{}") {
-                    JSONObject(templateContent)
-                } else {
-                    JSONObject()
-                }
-                val extra = if (jsonObject.has("_extra")) {
-                    jsonObject.getJSONObject("_extra")
-                } else {
-                    JSONObject().also { jsonObject.put("_extra", it) }
-                }
-                val newSubUrls = JSONArray()
-                for ((index, url) in validUrls.withIndex()) {
-                    newSubUrls.put(JSONArray().put("Sub ${index + 1}").put(url))
-                }
-                extra.put("sub_urls", newSubUrls)
-                templateContent = jsonObject.toString(2).replace("\\/", "/")
-            } catch (_: Exception) {
-            }
-        }
-
-        templateFile.writeText(templateContent)
-
-        // Try to compile, fallback to minimal placeholder if failed
-        var compiledSuccess = false
-        try {
-            if (templateContent.isNotBlank() && templateContent != "{}") {
-                val compiledConfig = Libbox.processTemplate(templateContent)
-                Libbox.checkConfig(compiledConfig)
-                configFile.writeText(compiledConfig)
-                compiledSuccess = true
-            }
-        } catch (_: Exception) {
-        }
-        if (!compiledSuccess) {
-            configFile.writeText("""{"outbounds":[{"type":"direct","tag":"direct"}]}""")
-        }
-
+        templateContent = TemplateProfileSource.overrideSubscriptions(templateContent, state.templateSubUrls)
+        ProfileUpdater.saveTemplate(profile, templateContent, initial = true)
         ProfileManager.create(profile, andSelect = true)
+        if (typedProfile.autoUpdate) UpdateProfileWork.reconfigureUpdater()
         return profile
     }
 }

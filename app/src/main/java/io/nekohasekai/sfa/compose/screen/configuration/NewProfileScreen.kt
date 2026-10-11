@@ -563,7 +563,7 @@ fun NewProfileScreen(
 
             // Remote Profile Options
             AnimatedVisibility(
-                visible = uiState.profileType == ProfileType.Remote,
+                visible = uiState.profileType == ProfileType.Remote || uiState.profileType == ProfileType.Template,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically(),
             ) {
@@ -595,6 +595,7 @@ fun NewProfileScreen(
                             )
                         }
 
+                        if (uiState.profileType == ProfileType.Remote) {
                         OutlinedTextField(
                             value = uiState.remoteUrl,
                             onValueChange = viewModel::updateRemoteUrl,
@@ -611,6 +612,8 @@ fun NewProfileScreen(
                                 }
                             },
                         )
+
+                        }
 
                         HorizontalDivider()
 

@@ -331,7 +331,7 @@ private fun ProfilePickerRow(
                             R.string.profile_type_remote_updated,
                             RelativeTimeFormatter.format(context, profile.typed.lastUpdated),
                         )
-                        TypedProfile.Type.Template -> stringResource(R.string.profile_type_template)
+                        TypedProfile.Type.Template -> profile.typed.templateError.ifEmpty { stringResource(R.string.profile_type_template) }
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),

@@ -73,7 +73,7 @@ android {
         targetSdk = 37
         versionCode = getVersionProps("VERSION_CODE").toInt()
         versionName = getVersionProps("VERSION_NAME")
-        base.archivesName.set("SFA-${versionName}")
+        base.archivesName.set("Tubing-${versionName}")
     }
 
     signingConfigs {
@@ -203,6 +203,9 @@ dependencies {
     val webkitVersion21 = "1.14.0"
     val coreVersion21 = "1.17.0"
     val materialVersion21 = "1.13.0"
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 
     // Common dependencies (no API level difference)
     implementation("androidx.appcompat:appcompat:1.7.1")

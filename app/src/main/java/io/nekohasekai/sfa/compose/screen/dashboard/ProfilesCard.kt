@@ -671,7 +671,7 @@ private fun ProfileInfoRow(profile: Profile?) {
                 text = if (profile.typed.type == TypedProfile.Type.Remote) {
                     stringResource(R.string.profile_type_remote)
                 } else if (profile.typed.type == TypedProfile.Type.Template) {
-                    stringResource(R.string.profile_type_template)
+                    profile.typed.templateError.ifEmpty { stringResource(R.string.profile_type_template) }
                 } else {
                     stringResource(R.string.profile_type_local)
                 },
