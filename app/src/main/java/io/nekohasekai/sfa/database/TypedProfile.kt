@@ -14,11 +14,13 @@ class TypedProfile() : Parcelable {
     enum class Type {
         Local,
         Remote,
+        Template,
         ;
 
         fun getString(context: Context): String = when (this) {
             Local -> context.getString(R.string.profile_type_local)
             Remote -> context.getString(R.string.profile_type_remote)
+            Template -> context.getString(R.string.profile_type_template)
         }
 
         companion object {
@@ -40,6 +42,12 @@ class TypedProfile() : Parcelable {
     var autoUpdate: Boolean = false
     var autoUpdateInterval = 60
 
+    var templateError: String = ""
+
+    val templatePath: String
+        get() = if (path.endsWith(".json")) path.removeSuffix(".json") + ".template.json" else "$path.template.json"
+
+
     constructor(reader: Parcel) : this() {
         val version = reader.readInt()
         path = reader.readString() ?: ""
@@ -50,16 +58,18 @@ class TypedProfile() : Parcelable {
         if (version >= 1) {
             autoUpdateInterval = reader.readInt()
         }
+        if (version >= 2) templateError = reader.readString() ?: ""
     }
 
     override fun writeToParcel(writer: Parcel, flags: Int) {
-        writer.writeInt(1)
+        writer.writeInt(2)
         writer.writeString(path)
         writer.writeInt(type.ordinal)
         writer.writeString(remoteURL)
         writer.writeInt(if (autoUpdate) 1 else 0)
         writer.writeLong(lastUpdated.time)
         writer.writeInt(autoUpdateInterval)
+        writer.writeString(templateError)
     }
 
     override fun describeContents(): Int = 0

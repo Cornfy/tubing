@@ -9,6 +9,9 @@ import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.TypedProfile
+import io.nekohasekai.sfa.database.ProfileUpdater
+import io.nekohasekai.sfa.bg.UpdateProfileWork
+import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -322,10 +325,11 @@ class ProfileImportHandler(private val context: Context) {
 
     private suspend fun importJsonConfiguration(jsonContent: String, profileName: String): ImportResult {
         return try {
+            val isTemplate = runCatching { JSONObject(jsonContent).has("_extra") }.getOrDefault(false)
             // Validate the JSON configuration using sing-box
             try {
                 // Try to check the configuration
-                Libbox.checkConfig(jsonContent)
+                if (!isTemplate) Libbox.checkConfig(jsonContent)
             } catch (e: Exception) {
                 // Configuration validation failed
                 return ImportResult.Error(
@@ -336,7 +340,8 @@ class ProfileImportHandler(private val context: Context) {
             // Create a local profile with the JSON configuration
             val typedProfile =
                 TypedProfile().apply {
-                    type = TypedProfile.Type.Local
+                    type = if (isTemplate) TypedProfile.Type.Template else TypedProfile.Type.Local
+                    autoUpdate = isTemplate
                 }
 
             val profile =
@@ -351,11 +356,16 @@ class ProfileImportHandler(private val context: Context) {
             val fileID = ProfileManager.nextFileID()
             val configDirectory = File(context.filesDir, "configs").also { it.mkdirs() }
             val configFile = File(configDirectory, "$fileID.json")
-            configFile.writeText(jsonContent)
             typedProfile.path = configFile.path
+            if (isTemplate) {
+                ProfileUpdater.saveTemplate(profile, jsonContent, initial = true)
+            } else {
+                ProfileUpdater.writeAtomically(configFile, jsonContent)
+            }
 
             // Create profile in database and select it
             ProfileManager.create(profile, andSelect = true)
+            if (isTemplate) UpdateProfileWork.reconfigureUpdater()
 
             ImportResult.Success(profile)
         } catch (e: Exception) {
